@@ -1,34 +1,4 @@
-# ---- Proprietary / third-party material: NOT redistributable, never committed -------------
-# Extracted Nuance binaries, installers, model assets, vendor docs and decompiler output.
-Dragon16.zip
-extract/
-allprog/
-bins/
-asrbins/
-asrfiles/
-voicefiles/
-voice/
-datapack/
-msi_streams/
-msi_tables/
-sdkdocs/
-decomp/
-ghidra_proj/
-
-# Vendor descriptor files kept locally only (tests skip when absent)
-tests/fixtures/broker/
-
-# 7-Zip portable distribution payload
-7z.tar.xz
-7zz
-7zzs
-MANUAL/
-History.txt
-License.txt
-readme.txt
-
-# Generated / transient
-session_tmp/
+vendor/
 __pycache__/
 *.pyc
 *.log

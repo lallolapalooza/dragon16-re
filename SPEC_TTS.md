@@ -628,3 +628,70 @@ per frame of side information and `uselect UNIT` 20.000 B per frame.  `pmtables.
 returns these numbers.  What remains for bit-exact synthesis is the frame decoder itself
 (`SPCH` frame -> PCM) using the `CODR`/`CDBK` codebooks, i.e. the `155mrf22`/`bet2f22` decoder in
 `rsstdv2_dec11.dll` (`gsmc_GetInterface`) and the `vautov5` `xcoder` components.
+
+---
+
+## 15. Gap closures (this revision)
+
+### 15.1 Literal setting names — **CLOSED**
+
+The settings layer (`RgyReadDataInt`/`RgyReadDataCStr`, provided by **`dd10shrd.dll`**) stores the
+literal names in that module as UTF-16 strings, so the symbolic names used throughout §7 and
+§ARCHITECTURE can now be resolved exactly:
+
+| symbolic name (binary) | literal setting name |
+|---|---|
+| `g_wRGY_TTSModeName` | `TTS Mode Name` |
+| `g_wRGY_UKTTSModeName` | `UK TTS Mode Name` (default value string: `British English Serena`) |
+| `g_wRGY_TTSPitch` | `TTS Pitch` |
+| `g_wRGY_TTSSpeed` | `TTS Speed` |
+| `g_wRGY_TTSVolume` | `TTS Volume` |
+| `g_wRGY_useRealSpeakV2SAPI4` | `Use RealSpeak Standard V2 SAPI4` |
+| `g_wRGY_TTSAllowAllLanguages` | `TTS Allow All Languages` |
+| — | `TTS Output Device ID`, `TTS Enabled` |
+| playback family | `Playback Volume`, `Fast-forward Volume`, `RGY_playbackVolume`, `RGY_fastForwardVolume`, `RGY_rewindVolume`, `RGY_useAltVolume` |
+
+Extraction tool: `tools/pe_stringtable.py <module> [filter]` (PE STRINGTABLE + UTF-16 run scan);
+the names above were read from `dd10shrd.dll` in the order they appear in its name table, which is
+the order the settings API indexes.
+
+### 15.2 `clc_*_cfg3.dat` container — **CLOSED**
+
+Own container family (not DFILE, not the LHS `.dat`): magic `0x1FE632E7` with record magics
+`0x1FE7C8B5` / `0x1FE6AD1F`, header = `magic, version, flags, file_size (== on-disk size), flags2
+= 0x00010004, offset_a = 0x00144000, …`, followed by tagged records (`NVAR`, `pipeline`, `global`,
+`silence`, `depes_<lang>_<voice>`, `phonmap_<lang>_<voice>`, `SCANSOFT`) and length-prefixed
+strings. The linguistic payload is readable:
+
+* **letter-to-sound / lexicon rules**, e.g. `(th)en 'DEn`, `batt(le) 'b@.r6l%)`, `(u)rt 'kE0R+t`,
+  `(a)p 'm@p` (ENU and ENG variants differ, as expected);
+* alphabet/character-class tables (`ABC…XYZabc…`), phone symbols (`E0 R+ S R6 ^ @ &` style);
+* `"tag:question"` / `"tag:statement"` prosody tags;
+* voice identity (`enu`/`samantha`, `eng`/`serena`, version `1.00`).
+
+Reader: `dragon_tts.clcread.ClcFile` (header, records, ASCII-run strings, rule lines, tags,
+identity). Measured: `clc_enu_samantha_cfg3.dat` → 3 records / 315 strings / 41 rules;
+`clc_enu_cfg3.dat` → 203 records / 69 859 strings / 44 rules; `clc_eng_serena_cfg3.dat` →
+4 / 363 / 45. The numeric tables remain opaque (undocumented packing); the readable layer is
+enough to rebuild the front end around the shipped rules.
+
+### 15.3 `155mrf22` coder — **architecture documented, decoder not ported**
+
+`rsstdv2_dec11.dll` (49 KB) has been decompiled in full: 46 functions behind
+`gsmc_GetInterface` (broker `decoder/83swf11`), float DSP with order-7 correlation/prediction
+stages and per-frame array processing — i.e. a predictive multi-rate codec whose frames are the
+152.825-byte units measured in §14.6 (220.84 frames/s, ~4.53 ms, codebooks `CODR` 41,032 B and
+`CDBK` 49,152 B). Closing this to bit-exact PCM means porting those 46 DSP functions plus the
+codebook packing (see `ARCHITECTURE.md` §11) — a bounded port now that the interface, frame
+geometry and codebook sizes are known. `synth.CoderSynthesiser` remains the seam and the reference
+implementation continues to ship the formant synthesiser behind the same interfaces.
+
+### 15.4 139-byte init blob — **characterised, not decoded**
+
+The constant passed to `lhs_InitializeEx(0, key, 1, &h)` is byte-identical in `natspeak.exe` and
+`rsstdv2.dll`; it is 139 bytes of printable ASCII with no repeating-key XOR/rotation structure that
+yields text, so it is treated as an obfuscated licence/OEM key rather than a string. Its consumer
+is the missing `lhsp\lhasr01w.dll` path in `lhsp01.dll`, so it cannot be resolved further without
+that module (not shipped in v16). No API depends on its *value* in the rebuilt stack: the
+reference implementation accepts and ignores it, matching the observed tolerance (the caller
+accepts both `0` and `0xC9` as success).
