@@ -20,7 +20,10 @@ from dragon_tts import broker as broker_mod, datfile, hdr, lhs_tts, phonemes, sa
 from dragon_tts.pipeline import Pipeline
 from dragon_tts.voicebank import VoiceBank
 
-VOICEFILES = os.path.join(ROOT, "voicefiles")
+VOICEFILES = next((p for p in (os.path.join(ROOT, "voicefiles"),
+                               os.path.join(ROOT, "vendor", "voices"),
+                               os.path.join(os.path.dirname(ROOT), "vendor", "voices"))
+                   if os.path.isdir(p)), os.path.join(ROOT, "voicefiles"))
 ALLPROG = os.path.join(ROOT, "allprog")
 FIXTURES = os.path.join(ROOT, "tests", "fixtures", "broker")
 REALSPEAK_DIR = FIXTURES if os.path.isdir(FIXTURES) else ""
@@ -73,8 +76,11 @@ class TestDatContainer(unittest.TestCase):
         self.assertEqual(df.get("CTUN").payload, b"\x82\x39\x04\x00")  # 276354
 
     def test_bad_magic(self):
+        path = os.path.join(VOICEFILES, "clc_enu_samantha_cfg3.dat")
+        if not os.path.exists(path):
+            self.skipTest("clc asset not extracted")
         with self.assertRaises(ValueError):
-            datfile.DatFile(os.path.join(VOICEFILES, "clc_enu_samantha_cfg3.dat"))
+            datfile.DatFile(path)
 
 
 class TestHdrDescriptors(unittest.TestCase):
@@ -220,6 +226,38 @@ class TestCoderGeometry(unittest.TestCase):
         self.assertAlmostEqual(g["bytes_per_unit"], 152.825, places=2)
         self.assertAlmostEqual(g["frames_per_second"], 220.84, places=1)
         self.assertGreater(g["bank_seconds"], 1000.0)
+
+
+class TestClcContainer(unittest.TestCase):
+    def _file(self, name):
+        for base in (VOICEFILES, os.path.join(ROOT, "vendor", "voices")):
+            p = os.path.join(base, name)
+            if os.path.exists(p):
+                return p
+        return None
+
+    def test_header_and_identity(self):
+        from dragon_tts import clcread
+        path = self._file("clc_enu_samantha_cfg3.dat")
+        if not path:
+            self.skipTest("clc assets not extracted")
+        c = clcread.ClcFile(path)
+        self.assertEqual(c.header.magic, 0x1FE632E7)
+        self.assertEqual(c.header.file_size, c.size)
+        self.assertEqual(c.header.flags2, 0x00010004)
+        ident = c.voice_identity()
+        self.assertEqual(ident.get("langcode"), "enu")
+        self.assertEqual(ident.get("voice"), "samantha")
+
+    def test_letter_to_sound_rules(self):
+        from dragon_tts import clcread
+        path = self._file("clc_enu_cfg3.dat")
+        if not path:
+            self.skipTest("clc assets not extracted")
+        rules = clcread.read_rules(path)
+        joined = " ".join(rules)
+        self.assertIn("(th)en", joined)
+        self.assertTrue(any(r.count("'") == 1 for r in rules))
 
 
 class TestPipeline(unittest.TestCase):

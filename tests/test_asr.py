@@ -20,8 +20,14 @@ from dragon_asr.engine import EngineControl, RDApi_GetDFileInfo, RDApi_IsDFile, 
 from dragon_asr.features import Mfcc, MfccConfig, WavFile, detect_speech, hz_to_mel, mel_to_hz
 from dragon_asr.transcribe import synth_word_frames
 
-ASRFILES = os.path.join(ROOT, "asrfiles")
-ASRBINS = os.path.join(ROOT, "asrbins")
+ASRFILES = next((p for p in (os.path.join(ROOT, "asrfiles"),
+                             os.path.join(ROOT, "vendor", "data"),
+                             os.path.join(os.path.dirname(ROOT), "vendor", "data"))
+                 if os.path.isdir(p)), os.path.join(ROOT, "asrfiles"))
+ASRBINS = next((p for p in (os.path.join(ROOT, "asrbins"),
+                            os.path.join(ROOT, "vendor", "prog"),
+                            os.path.join(os.path.dirname(ROOT), "vendor", "prog"))
+                if os.path.isdir(p)), os.path.join(ROOT, "asrbins"))
 
 
 def first_existing(*paths):
